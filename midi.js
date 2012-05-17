@@ -5,6 +5,8 @@ var util = require('util');
 
 var readVariableLength = require('./lib/variable_length').readVariableLength;
 var metaEvent = require('./lib/meta_event').metaEvent;
+var sysexEvent = require('./lib/sysex_event').sysexEvent;
+var midicontrolEvent = require('./lib/midicontrol_event').midicontrolEvent;
 
 var readMidiHeader = function(buffer){
   var timeDiv, topBit,ret;
@@ -38,22 +40,15 @@ var readEvent = function(buffer,offset){
   byte = buffer.readUInt8(offset + pos);
   util.log('event type byte reads: ' + byte);
   if(byte === 0xFF){ // meta
-    return metaEvent(buffer,offset+pos);
-    
+    ret = metaEvent(buffer,offset+pos);
+  } else if(byte === 0xF0){ // sysex
+    ret = sysexEvent(buffer,offset+pos); 
+  } else {
+    ret = midicontrolEvent(buffer,offset+pos);
   }
-  if(byte === 0xF0){ // sysex
-    //return sysExEvent(buffer,offset+pos); 
-  }
-  //return noteEvent(buffer,offset+pos);
-  ret = {};
-  ret['eventType'] = (byte & 0xFF) >> 4;
-  ret['channel'] = byte & 0xF;
-  pos += 1;
-  ret['param1'] = buffer.readInt8(offset + pos);
-  pos += 1;
-  ret['param2'] = buffer.readInt8(offset + pos);    
-  ret['length'] = pos;
+  ret['delta'] = delta.value;
   return ret;
+  //return noteEvent(buffer,offset+pos);
 };
 
 var readTrack = function(buffer,offset){
