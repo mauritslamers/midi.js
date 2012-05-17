@@ -57,12 +57,17 @@ var readEvent = function(buffer,offset){
 };
 
 var readTrack = function(buffer,offset){
-  var events = [], chunksize, counter = 0;
+  var events = [], chunksize, pos, evt;
   if(!buffer) return;
   if(buffer.toString('utf8',offset,offset + 4) !== "MTrk") return;
   chunksize = buffer.readUInt32BE(offset + 4); // number of bytes of trackdata starting next
-  var evt = readEvent(buffer,offset + 8);
-  util.log('event: ' + util.inspect(evt));
+  pos = 8;
+  while(pos<chunksize){
+    evt = readEvent(buffer,pos);
+    pos += evt.length;
+    events.push(evt);
+  }
+  util.log('events: ' + util.inspect(events));
 };
 
 
