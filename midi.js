@@ -63,11 +63,15 @@ var readTrack = function(buffer,offset){
   chunksize = buffer.readUInt32BE(offset + 4); // number of bytes of trackdata starting next
   pos = 8;
   while(pos<chunksize){
-    evt = readEvent(buffer,pos);
+    evt = readEvent(buffer,offset+pos);
     pos += evt.length;
     events.push(evt);
   }
   util.log('events: ' + util.inspect(events));
+  return {
+    events: events,
+    length: chunksize+8
+  };
 };
 
 
@@ -76,7 +80,13 @@ fs.readFile('simon2.mid',function(err,content){
   var header = readMidiHeader(content);
   if(!header.isMidi) throw('Not a midi file!');
   util.log('header info is: ' + util.inspect(header));
-  
-  var track = readTrack(content,14); // header size is always 14
+  var tracks = [], track;
+  var pos = 14;
+  for(var i=0;i<header.numTracks;i+=1){
+    track = readTrack(content,pos); // header size is always 14
+    pos += track.length;
+    tracks.push(track);
+  }
+  //util.log('tracks: ' + util.inspect(tracks));
   
 });
