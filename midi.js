@@ -28,7 +28,6 @@ var readMidiHeader = function(buffer){
     ret['frameRate'] = timeDiv & 0x7F00;
     ret['ticksPerFrame'] = timeDiv &0x00FF;
   }
-  
   return ret;
 };
 
@@ -75,8 +74,8 @@ var readTrack = function(buffer,offset){
   // for(var i=0;i<8;i+=1){
     evt = readEvent(buffer,offset+pos);
     //util.log('event read is: ' + util.inspect(evt));
-    evt.timeOffset = time; // delta is the time till the next message, so only update after
     time += evt.delta; // setting the timeOffset to the event
+    evt.timeOffset = time; // delta is the time we have to wait to play the event, so it is the offset
     pos += evt.length;
     events.push(evt);
     //if(pos >= chunksize) return ret;
@@ -100,6 +99,7 @@ var readMidiFromBuffer = function(content){
     tracks.push(track);
   }
   return {
+    header: header,
     tracks: tracks
   };
   //util.log('tracks: ' + util.inspect(tracks));
@@ -171,6 +171,7 @@ exports.MidiFile = SC.Object.extend({
           notes.push({
             type: 'note',
             start: noteon.timeOffset,
+            end: evt.timeOffset,
             duration: evt.timeOffset - noteon.timeOffset,
             channel: evt.channel,
             notenumber: evt.notenumber,
@@ -182,7 +183,11 @@ exports.MidiFile = SC.Object.extend({
       return notes; 
       //util.log('note events: ' + util.inspect(notes));
     });
-  }.property()
+  }.property(),
+  
+  absNotes: function(){
+    
+  }.property('notes')
 });
 
 
