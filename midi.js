@@ -2,6 +2,7 @@
 
 var fs = require('fs');
 var util = require('util');
+var SC = require('../sc-runtime');
 
 var readVariableLength = require('./lib/variable_length').readVariableLength;
 var metaEvent = require('./lib/meta_event').metaEvent;
@@ -68,12 +69,14 @@ var readTrack = function(buffer,offset){
     events: events,
     length: chunksize+8
   };
-  
+  var time = 0;
   pos = 8;
   while(pos<chunksize+8){
   // for(var i=0;i<8;i+=1){
     evt = readEvent(buffer,offset+pos);
     //util.log('event read is: ' + util.inspect(evt));
+    evt.timeOffset = time; // delta is the time till the next message, so only update after
+    time += evt.delta; // setting the timeOffset to the event
     pos += evt.length;
     events.push(evt);
     //if(pos >= chunksize) return ret;
@@ -86,7 +89,7 @@ var readTrack = function(buffer,offset){
 var readMidiFromBuffer = function(content){
   var header = readMidiHeader(content);
   if(!header.isMidi) return;
-  //util.log('header info is: ' + util.inspect(header));
+  util.log('header info is: ' + util.inspect(header));
   var tracks = [], track;
   var pos = 14;
   for(var i=0;i<header.numTracks;i+=1){ 
@@ -96,10 +99,13 @@ var readMidiFromBuffer = function(content){
     //util.log('new pos value: ' + pos);
     tracks.push(track);
   }
+  return {
+    tracks: tracks
+  };
   //util.log('tracks: ' + util.inspect(tracks));
 };
 
-exports.readMidiFile = function(filename,callback){ // callback gets err,array_with_tracks
+var readMidiFile = function(filename,callback){ // callback gets err,array_with_tracks
 
   fs.readFile(filename,function(err,content){
     // content is a Buffer
@@ -109,13 +115,11 @@ exports.readMidiFile = function(filename,callback){ // callback gets err,array_w
     } 
     var ret = readMidiFromBuffer(content);
     if(!ret) callback(new Error("Not a midi file"));
-
-
     callback(null,ret);
   });
 };
 
-exports.readMidiFileSync = function(filename){
+var readMidiFileSync = function(filename){
   var content = fs.readFileSync(filename);
   if(content){
     var ret = readMidiFromBuffer(content);
@@ -123,6 +127,63 @@ exports.readMidiFileSync = function(filename){
     else return ret;
   }
 };
+
+exports.readMidiFile = readMidiFile;
+exports.readMidiFileSync = readMidiFileSync;
+
+exports.MidiFile = SC.Object.extend({
+  filename: null,
+  
+  _mididata: null,
+  
+  init: function(){
+    arguments.callee.base.apply(this,arguments);
+    if(this.filename){
+      this._mididata = readMidiFileSync(this.filename);
+    }
+  },
+  
+  notes: function(){
+    if(!this._mididata) return;
+    if(!this._mididata.tracks) return [];
+
+
+    return this._mididata.tracks.map(function(track){
+      var noteEvents = track.events.filter(function(ev){
+        if(ev.type === 'noteon' || ev.type === 'noteoff') return true;
+      });
+      var notes = [];
+      var activeNotes = [];
+      noteEvents.forEach(function(evt){
+        util.log('evt is: ' + util.inspect(evt));
+        if((evt.type === 'noteon') && (evt.velocity > 0)){
+          util.log('evt is noteon with a velocity > 0, so push on activeNotes');
+          activeNotes.push(evt);
+          return;
+        }
+        util.log('contents of activeNotes is: ' + util.inspect(activeNotes));
+        // assume we have a note off now, which is either noteon with velocity 0 or a real note off
+        var activeEvts = activeNotes.filterProperty('notenumber',evt.notenumber).filterProperty('channel',evt.channel);
+        util.log('after filtering activeEvts, we find: ' + util.inspect(activeEvts));
+        if(activeEvts.length > 0){
+          // just take first
+          var noteon = activeEvts.shift();
+          notes.push({
+            type: 'note',
+            start: noteon.timeOffset,
+            duration: evt.timeOffset - noteon.timeOffset,
+            channel: evt.channel,
+            notenumber: evt.notenumber,
+            velocityOn: noteon.velocity,
+            velocityOff: evt.velocity // can be either 0 for a noteon-noteoff or something else for a real note off
+          });
+        }
+      });
+      return notes; 
+      //util.log('note events: ' + util.inspect(notes));
+    });
+  }.property()
+});
 
 
 
