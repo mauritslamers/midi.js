@@ -147,7 +147,6 @@ exports.MidiFile = SC.Object.extend({
     if(!this._mididata) return;
     if(!this._mididata.tracks) return [];
 
-
     return this._mididata.tracks.map(function(track){
       var noteEvents = track.events.filter(function(ev){
         if(ev.type === 'noteon' || ev.type === 'noteoff') return true;
@@ -155,20 +154,21 @@ exports.MidiFile = SC.Object.extend({
       var notes = [];
       var activeNotes = [];
       noteEvents.forEach(function(evt){
-        util.log('evt is: ' + util.inspect(evt));
+        //util.log('evt is: ' + util.inspect(evt));
         if((evt.type === 'noteon') && (evt.velocity > 0)){
-          util.log('evt is noteon with a velocity > 0, so push on activeNotes');
+          //util.log('evt is noteon with a velocity > 0, so push on activeNotes');
           activeNotes.push(evt);
           return;
         }
-        util.log('contents of activeNotes is: ' + util.inspect(activeNotes));
+        //util.log('contents of activeNotes is: ' + util.inspect(activeNotes));
         // assume we have a note off now, which is either noteon with velocity 0 or a real note off
         var activeEvts = activeNotes.filterProperty('notenumber',evt.notenumber).filterProperty('channel',evt.channel);
-        util.log('after filtering activeEvts, we find: ' + util.inspect(activeEvts));
+        //util.log('after filtering activeEvts, we find: ' + util.inspect(activeEvts));
         if(activeEvts.length > 0){
           // just take first
-          var noteon = activeEvts.shift();
-          notes.push({
+          var noteon = activeEvts[0];
+          activeNotes.removeObject(noteon);
+          var newnote = {
             type: 'note',
             start: noteon.timeOffset,
             end: evt.timeOffset,
@@ -177,7 +177,9 @@ exports.MidiFile = SC.Object.extend({
             notenumber: evt.notenumber,
             velocityOn: noteon.velocity,
             velocityOff: evt.velocity // can be either 0 for a noteon-noteoff or something else for a real note off
-          });
+          };
+          //util.log('newly written note is: ' + util.inspect(newnote));
+          notes.push(newnote);
         }
       });
       return notes; 
@@ -186,8 +188,47 @@ exports.MidiFile = SC.Object.extend({
   }.property(),
   
   absNotes: function(){
-    
-  }.property('notes')
+    var notenames = ["C","C#/Db","D","D#/Eb","E","F","F#/Gb","G","G#/Ab","A","A#/Bb","B"];
+    var notespertrack = this.get('notes');
+    return notespertrack.map(function(notes){
+      return notes.map(function(n){
+        n['notename'] = notenames[(n.notenumber % 12)];
+        n['bar'] = this.barFrom(n.start);
+        return n;
+      },this);      
+    },this);
+  }.property('notes'),
+  
+  keySignatures: function(){
+    // return an array of keys
+    var ret = [];
+    this._mididata.tracks.forEach(function(t){
+      ret = ret.concat(t.events.filterProperty('type','keysignature'));
+    });
+    // if not, return standard?
+    return ret;
+  }.property(),
+  
+  timeSignatures: function(){
+    // return an array of events
+    var ret = [];
+    this._mididata.tracks.forEach(function(t){
+      ret = ret.concat(t.events.filterProperty('type','timesignature'));
+    });
+    // if not found, return standard?
+    return ret;
+  }.property(),
+  
+  barFrom: function(timeOffset){
+    // two options: SMTPE or ticksPerBeat
+    var h = this._mididata.header;
+    if(h.ticksPerBeat){
+      var rest = timeOffset % h.ticksPerBeat;
+      var bar = (timeOffset - rest) / h.ticksPerBeat;
+      return [bar,rest].join(":");
+    }
+    else throw(new Error("SMPTE bar from not yet implemented"));
+  }
 });
 
 
