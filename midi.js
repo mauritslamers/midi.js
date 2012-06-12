@@ -2,7 +2,7 @@
 
 var fs = require('fs');
 var util = require('util');
-var SC = require('../sc-runtime');
+var SC = require('sc-runtime');
 
 var readVariableLength = require('./lib/variable_length').readVariableLength;
 var metaEvent = require('./lib/meta_event').metaEvent;
@@ -193,11 +193,39 @@ exports.MidiFile = SC.Object.extend({
     return notespertrack.map(function(notes){
       return notes.map(function(n){
         n['notename'] = notenames[(n.notenumber % 12)];
-        n['bar'] = this.barFrom(n.start);
+        n['beat'] = this.beatFrom(n.start);
+        n.noteLength = this.lengthToNoteLengths(n.duration).join('/');
+        
+        n.durationInBeats = this.durationInBeats(n.duration);
         return n;
       },this);      
     },this);
   }.property('notes'),
+  
+  lengthToNoteLengths: function(length){
+    var tpb = this._mididata.header.ticksPerBeat;
+    var numbeats = Math.floor(length/tpb);
+    var rest = length % tpb;
+    // for now assume one beat is a quarter (later lookup from time signature)
+    var l = 4;
+    var t,w = length/tpb;
+    var sizes = [];
+    for(var i=0;i<7;i+=1){
+      t = Math.floor(w/l);
+      if(t>0){
+        w = w - (l*t);
+      }
+      sizes.push(t);
+      l = l / 2;
+    }
+    return sizes; 
+  },
+  
+  absNotesInSize: function(){
+    var absNotes = this.get('absNotes');
+
+
+  }.property('absNotes'),
   
   keySignatures: function(){
     // return an array of keys
@@ -219,7 +247,14 @@ exports.MidiFile = SC.Object.extend({
     return ret;
   }.property(),
   
-  barFrom: function(timeOffset){
+  durationInBeats: function(duration){
+    var tpb = this._mididata.header.ticksPerBeat;
+    var numbeats = Math.floor(duration/tpb);
+    var rest = duration % tpb;
+    return [numbeats,rest].join(":");
+  },
+  
+  beatFrom: function(timeOffset){
     // two options: SMTPE or ticksPerBeat
     var h = this._mididata.header;
     if(h.ticksPerBeat){
@@ -228,7 +263,15 @@ exports.MidiFile = SC.Object.extend({
       return [bar,rest].join(":");
     }
     else throw(new Error("SMPTE bar from not yet implemented"));
-  }
+  },
+  
+  tempi: function(){
+    var ret = [];
+    this._mididata.tracks.forEach(function(t){
+      ret = ret.concat(t.events.filterProperty('type','settempo'));
+    });
+    return ret;
+  }.property()
 });
 
 
