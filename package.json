@@ -1,0 +1,9 @@
+{ 
+  "name" : "midi.js",
+  "author": "Maurits Lamers",
+  "main" : "./midi.js",
+  "dependencies": {
+    "sc-runtime": "git://github.com/mauritslamers/sc-runtime"
+  },
+  "version": "0.0.1"
+}
